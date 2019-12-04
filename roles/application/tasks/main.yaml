@@ -1,0 +1,65 @@
+ - name: Create the user "{{ projectName }}"
+   user:  name="{{ projectName }}"
+   become: true
+
+ - name: Create the  group "{{ projectGroup }}"
+   group: name="{{ projectGroup }}"
+   become: true
+
+ - name: Make new directory "{{ appDest + platform + projectName }}" for app in platform "{{ platform }}"
+   file:
+     path: "{{ item }}"
+     state: directory
+     mode: "o+w"
+   with_items:
+      - "{{ appDest }}"
+      - "{{ appDest + platform }}"
+      - "{{ appDest + platform + projectName }}"
+   become: true
+
+ - name: Give owner as "{{ projectName }}" and group as "{{ projectGroup }}"
+   file:
+     path: "{{ appDest + platform + projectName }}"
+     owner: "{{ projectName }}"
+     group: "{{ projectGroup }}"
+   become: true
+
+ - name: check status of jdk in container
+   stat: path="{{ appDest + platform + projectName}}/{{ java }}"
+   register: javaExists
+
+ #copying tomat if jdk-version directory is not present
+ - name: copy jdk "{{ jdkDest + java }}" to "{{ appDest + platform + projectName }}"
+   synchronize:
+     mode: pull
+     src: "{{ jdkDest + java }}"
+     dest: "{{ appDest + platform + projectName }}"
+   delegate_to: "{{ inventory_hostname  }}"
+   when: javaExists.stat.exists==false
+   become: true
+
+ - name: check status of tomcat in container
+   stat: path="{{ appDest + platform + projectName }}/{{ tomcat }}"
+   register: isTomcat
+
+ #copying tomat if apache-tomcat-version directory is not  present
+ - name: prepare tomcat "{{ tomcatDest + tomcat }}" to "{{ appDest + platform + projectName}}"
+   synchronize:
+     mode: pull
+     src: "{{ tomcatDest + tomcat }}"
+     dest: "{{ appDest + platform + projectName }}"
+   delegate_to: "{{ inventory_hostname  }}"
+   when: isTomcat.stat.exists==false
+   become: true
+
+ #Addding JAVA_OPTS in server
+ - lineinfile:
+     path: "{{ appDest + platform + projectName }}/{{ tomcat }}/bin/setenv.sh"
+     create: yes
+     regexp: '^export JAVA_OPTS'
+     line: 'export JAVA_OPTS="$JAVA_OPTS {{ JAVA_OPTS}}"'
+     owner: "{{ projectName }}"
+     group: "{{ projectGroup }}"
+     mode: 0644
+     state: present
+   become: true
